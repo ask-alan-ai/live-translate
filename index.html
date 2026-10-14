@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Translate</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1d1b;--mute:#6b6a65;--line:#e6e3dc;--card:#fff;--accent:#2563eb;--accent-fg:#fff;--live:#16a34a;--warn:#b45309}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#f1efe9;--mute:#a19f96;--line:#2c2b28;--card:#1c1c1a;--accent:#3b82f6;--live:#22c55e;--warn:#f59e0b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:4px}
+label.chk{flex-direction:row;align-items:center;gap:6px;font-size:14px;color:var(--fg)}
+select,input[type=text]{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);max-width:100%}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;background:var(--accent);color:var(--accent-fg)}
+button.secondary{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:500}
+#go.on{background:#dc2626}
+#status{margin:12px 2px;font-size:14px;color:var(--mute);min-height:21px}
+#status .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mute);margin-right:6px;vertical-align:1px}
+#status.live .dot{background:var(--live)}
+#status.warn{color:var(--warn)}
+#interim{min-height:28px;color:var(--mute);font-style:italic;margin:0 2px 8px}
+#latest{font-size:30px;line-height:1.3;font-weight:600;min-height:40px;margin:4px 2px 16px}
+#log{border-top:1px solid var(--line)}
+.row{padding:10px 2px;border-bottom:1px solid var(--line)}
+.row .t{font-size:19px}
+.row .o{font-size:14px;color:var(--mute)}
+details{margin-top:18px;font-size:14px;color:var(--mute)}
+details .test{display:flex;gap:8px;margin-top:8px}
+details .test input{flex:1}
+.foot{margin-top:18px;font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Live Translate</h1>
+  <div class="bar">
+    <label>Listen for
+      <select id="from">
+        <option value="pt-BR">Portuguese (Brazil)</option>
+        <option value="pt-PT">Portuguese (Portugal)</option>
+        <option value="en-US">English</option>
+        <option value="es-ES">Spanish</option>
+        <option value="fr-FR">French</option>
+        <option value="de-DE">German</option>
+      </select>
+    </label>
+    <label>Translate to
+      <select id="to">
+        <option value="en">English</option>
+        <option value="pt">Portuguese</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+      </select>
+    </label>
+    <label>Voice
+      <select id="voice"></select>
+    </label>
+    <label class="chk"><input type="checkbox" id="speak" checked> Speak it</label>
+    <label class="chk" title="With headphones the mic keeps listening while the voice plays. Without them it pauses so it does not translate its own voice."><input type="checkbox" id="phones"> Using headphones</label>
+    <button id="go">Start</button>
+  </div>
+  <div id="status"><span class="dot"></span><span id="st">Press Start and allow the microphone.</span></div>
+  <div id="interim"></div>
+  <div id="latest"></div>
+  <div id="log"></div>
+  <details>
+    <summary>Test without speaking</summary>
+    <div class="test"><input type="text" id="testIn" placeholder="Type a sentence in the listen language"><button class="secondary" id="testGo">Translate</button></div>
+  </details>
+  <div class="foot">Works best in Chrome. Speech recognition runs through the browser's speech service and translation through Google Translate. Nothing is saved: closing the tab clears the transcript.</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const synth = window.speechSynthesis;
+const q = new URLSearchParams(location.search);
+if (q.get('from')) $('from').value = q.get('from');
+if (q.get('to')) $('to').value = q.get('to');
+if (q.get('speak') === '0') $('speak').checked = false;
+
+let rec = null, running = false, pausedForVoice = false, queue = [], talking = false;
+
+function status(msg, cls) { $('st').textContent = msg; $('status').className = cls || ''; }
+
+// ---- voices ----
+function loadVoices() {
+  if (!synth) return;
+  const lang = $('to').value, vs = synth.getVoices().filter(v => v.lang.toLowerCase().startsWith(lang));
+  const score = v => (/premium/i.test(v.name) ? 40 : 0) + (/enhanced/i.test(v.name) ? 30 : 0) + (/google/i.test(v.name) ? 20 : 0)
+    + (/^(samantha|ava|alex|joana|luciana|felipe)/i.test(v.name) ? 10 : 0) + (v.lang === 'en-US' ? 5 : 0);
+  vs.sort((a, b) => score(b) - score(a));
+  const prev = $('voice').value;
+  $('voice').innerHTML = '';
+  for (const v of vs) { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')'; $('voice').appendChild(o); }
+  if (vs.some(v => v.name === prev)) $('voice').value = prev;
+}
+if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+$('to').onchange = loadVoices;
+
+function say(text) {
+  if (!synth || !$('speak').checked) return;
+  // Chrome cuts long utterances off, so speak sentence by sentence
+  for (const part of text.match(/[^.!?]+[.!?]*/g) || [text]) if (part.trim()) queue.push(part.trim());
+  pump();
+}
+function pump() {
+  if (talking) return;
+  const next = queue.shift();
+  if (!next) { if (pausedForVoice) { pausedForVoice = false; if (running) startRec(); } return; }
+  talking = true;
+  if (running && !$('phones').checked && rec && !pausedForVoice) { pausedForVoice = true; try { rec.abort(); } catch (e) {} }
+  const u = new SpeechSynthesisUtterance(next);
+  const v = synth.getVoices().find(v => v.name === $('voice').value);
+  if (v) { u.voice = v; u.lang = v.lang; } else u.lang = $('to').value;
+  u.rate = 1.05;
+  u.onend = u.onerror = () => { talking = false; pump(); };
+  synth.speak(u);
+}
+
+// ---- translation ----
+async function translate(text, sl, tl) {
+  const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + sl + '&tl=' + tl + '&q=' + encodeURIComponent(text);
+  const d = await (await fetch(url)).json();
+  return d[0].map(p => p[0]).join('');
+}
+
+async function handleFinal(text) {
+  text = text.trim();
+  if (!text) return;
+  const sl = $('from').value.split('-')[0], tl = $('to').value;
+  let out = text;
+  try { if (sl !== tl) out = await translate(text, sl, tl); }
+  catch (e) { status('Translation failed, check the connection. Showing the original.', 'warn'); }
+  $('latest').textContent = out;
+  const row = document.createElement('div');
+  row.className = 'row';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = out;
+  const o = document.createElement('div'); o.className = 'o'; o.textContent = text;
+  row.append(t, o);
+  $('log').prepend(row);
+  say(out);
+}
+
+// ---- recognition ----
+function startRec() {
+  if (!rec) return;
+  rec.lang = $('from').value;
+  try { rec.start(); } catch (e) { /* already started */ }
+}
+
+function setup() {
+  rec = new SR();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onstart = () => status('Listening...', 'live');
+  rec.onresult = e => {
+    if (pausedForVoice) return;
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) handleFinal(r[0].transcript); else interim += r[0].transcript;
+    }
+    $('interim').textContent = interim;
+  };
+  rec.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stop(); status('Microphone blocked. Allow it in the address bar, then press Start again.', 'warn'); }
+    else if (e.error === 'network') status('Speech service unreachable, retrying...', 'warn');
+  };
+  // Chrome ends recognition after silence or a network blip: restart while running
+  rec.onend = () => { $('interim').textContent = ''; if (running && !pausedForVoice) setTimeout(startRec, 250); else if (pausedForVoice) status('Speaking...', 'live'); };
+}
+
+function stop() { running = false; pausedForVoice = false; queue = []; if (synth) synth.cancel(); talking = false; try { rec && rec.abort(); } catch (e) {} $('go').textContent = 'Start'; $('go').classList.remove('on'); status('Stopped.'); }
+
+$('go').onclick = () => {
+  if (running) return stop();
+  if (!SR) { status('This browser has no speech recognition. Open the link in Chrome.', 'warn'); return; }
+  if (!rec) setup();
+  running = true;
+  $('go').textContent = 'Stop'; $('go').classList.add('on');
+  if (synth) synth.speak(new SpeechSynthesisUtterance('')); // unlock audio on this click
+  startRec();
+};
+$('from').onchange = () => { if (running) { try { rec.abort(); } catch (e) {} } };
+$('testGo').onclick = () => { handleFinal($('testIn').value); $('testIn').value = ''; };
+$('testIn').onkeydown = e => { if (e.key === 'Enter') $('testGo').click(); };
+if (!SR) status('This browser has no speech recognition. Open the link in Chrome.', 'warn');
+</script>
+</body>
+</html>
