@@ -5,72 +5,101 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live Translate</title>
 <style>
-:root{--bg:#fbfaf7;--fg:#1d1d1b;--mute:#6b6a65;--line:#e6e3dc;--card:#fff;--accent:#2563eb;--accent-fg:#fff;--live:#16a34a;--warn:#b45309}
-@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#f1efe9;--mute:#a19f96;--line:#2c2b28;--card:#1c1c1a;--accent:#3b82f6;--live:#22c55e;--warn:#f59e0b}}
+:root{--bg:#fbfaf7;--fg:#1d1d1b;--mute:#6b6a65;--line:#e6e3dc;--card:#fff;--accent:#2563eb;--accent-fg:#fff;--live:#16a34a;--warn:#b45309;--stop:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#f1efe9;--mute:#a19f96;--line:#2c2b28;--card:#1c1c1a;--accent:#3b82f6;--live:#22c55e;--warn:#f59e0b;--stop:#ef4444}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 .wrap{max-width:860px;margin:0 auto;padding:16px}
 h1{font-size:20px;margin:4px 0 12px}
-.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.card{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.dir{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.dir button{background:transparent;color:var(--fg);border:1px solid var(--line);font-size:16px;padding:12px 8px}
+.dir button.sel{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:4px}
 label.chk{flex-direction:row;align-items:center;gap:6px;font-size:14px;color:var(--fg)}
 select,input[type=text]{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);max-width:100%}
 button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;background:var(--accent);color:var(--accent-fg)}
 button.secondary{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:500}
-#go.on{background:#dc2626}
-#status{margin:12px 2px;font-size:14px;color:var(--mute);min-height:21px}
+#go{min-width:96px}
+#go.on{background:var(--stop)}
+#status{margin:12px 2px 6px;font-size:14px;color:var(--mute);min-height:21px}
 #status .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mute);margin-right:6px;vertical-align:1px}
 #status.live .dot{background:var(--live)}
 #status.warn{color:var(--warn)}
-#interim{min-height:28px;color:var(--mute);font-style:italic;margin:0 2px 8px}
+#pending{min-height:28px;color:var(--mute);margin:0 2px 4px}
+#pending .i{font-style:italic;opacity:.8}
+.timer{height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin:0 2px 12px}
+.timer div{height:100%;width:0;background:var(--accent)}
 #latest{font-size:30px;line-height:1.3;font-weight:600;min-height:40px;margin:4px 2px 16px}
 #log{border-top:1px solid var(--line)}
 .row{padding:10px 2px;border-bottom:1px solid var(--line)}
 .row .t{font-size:19px}
 .row .o{font-size:14px;color:var(--mute)}
-details{margin-top:18px;font-size:14px;color:var(--mute)}
-details .test{display:flex;gap:8px;margin-top:8px}
-details .test input{flex:1}
+details{margin-top:12px;font-size:14px;color:var(--mute)}
+details .inner{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:8px}
+details .inner input{flex:1;min-width:200px}
 .foot{margin-top:18px;font-size:12px;color:var(--mute)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Live Translate</h1>
-  <div class="bar">
-    <label>Listen for
-      <select id="from">
-        <option value="pt-BR">Portuguese (Brazil)</option>
-        <option value="pt-PT">Portuguese (Portugal)</option>
-        <option value="en-US">English</option>
-        <option value="es-ES">Spanish</option>
-        <option value="fr-FR">French</option>
-        <option value="de-DE">German</option>
-      </select>
-    </label>
-    <label>Translate to
-      <select id="to">
-        <option value="en">English</option>
-        <option value="pt">Portuguese</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-        <option value="de">German</option>
-      </select>
-    </label>
-    <label>Voice
-      <select id="voice"></select>
-    </label>
-    <label class="chk"><input type="checkbox" id="speak" checked> Speak it</label>
-    <label class="chk" title="With headphones the mic keeps listening while the voice plays. Without them it pauses so it does not translate its own voice."><input type="checkbox" id="phones"> Using headphones</label>
-    <button id="go">Start</button>
+  <div class="card">
+    <div class="dir">
+      <button id="dPtEn" data-from="pt-BR" data-to="en">Português → English</button>
+      <button id="dEnPt" data-from="en-US" data-to="pt">English → Português</button>
+    </div>
+    <div class="bar">
+      <label>Translate after a pause of
+        <select id="wait">
+          <option value="2000">2 seconds</option>
+          <option value="3000">3 seconds</option>
+          <option value="5000" selected>5 seconds</option>
+          <option value="8000">8 seconds</option>
+        </select>
+      </label>
+      <label>Voice
+        <select id="voice"></select>
+      </label>
+      <label class="chk"><input type="checkbox" id="speak" checked> Read aloud</label>
+      <label class="chk" title="With headphones the mic keeps listening while the voice plays. Without them it pauses so it does not translate its own voice."><input type="checkbox" id="phones"> Using headphones</label>
+      <button id="go">Start</button>
+      <button class="secondary" id="now" title="Translate what has been heard so far without waiting">Translate now</button>
+    </div>
   </div>
-  <div id="status"><span class="dot"></span><span id="st">Press Start and allow the microphone.</span></div>
-  <div id="interim"></div>
+  <div id="status"><span class="dot"></span><span id="st">Pick a direction, press Start and allow the microphone.</span></div>
+  <div id="pending"></div>
+  <div class="timer"><div id="bar"></div></div>
   <div id="latest"></div>
   <div id="log"></div>
   <details>
+    <summary>Other languages</summary>
+    <div class="inner">
+      <label>Listen for
+        <select id="from">
+          <option value="pt-BR">Portuguese (Brazil)</option>
+          <option value="pt-PT">Portuguese (Portugal)</option>
+          <option value="en-US">English</option>
+          <option value="es-ES">Spanish</option>
+          <option value="fr-FR">French</option>
+          <option value="de-DE">German</option>
+        </select>
+      </label>
+      <label>Translate to
+        <select id="to">
+          <option value="en">English</option>
+          <option value="pt">Portuguese</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+        </select>
+      </label>
+    </div>
+  </details>
+  <details>
     <summary>Test without speaking</summary>
-    <div class="test"><input type="text" id="testIn" placeholder="Type a sentence in the listen language"><button class="secondary" id="testGo">Translate</button></div>
+    <div class="inner"><input type="text" id="testIn" placeholder="Type a sentence in the listen language"><button class="secondary" id="testGo">Translate</button></div>
   </details>
   <div class="foot">Works best in Chrome. Speech recognition runs through the browser's speech service and translation through Google Translate. Nothing is saved: closing the tab clears the transcript.</div>
 </div>
@@ -78,29 +107,37 @@ details .test input{flex:1}
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synth = window.speechSynthesis;
-const q = new URLSearchParams(location.search);
-if (q.get('from')) $('from').value = q.get('from');
-if (q.get('to')) $('to').value = q.get('to');
-if (q.get('speak') === '0') $('speak').checked = false;
 
 let rec = null, running = false, pausedForVoice = false, queue = [], talking = false;
+// heard but not yet translated: finished phrases, plus the phrase still being spoken
+let pending = [], seen = new Set(), interimText = '', interimIdx = [], timer = null, timerStart = 0;
 
 function status(msg, cls) { $('st').textContent = msg; $('status').className = cls || ''; }
+
+// ---- direction ----
+function markDir() {
+  for (const b of document.querySelectorAll('.dir button'))
+    b.classList.toggle('sel', b.dataset.from === $('from').value && b.dataset.to === $('to').value);
+}
+function setDir(from, to) {
+  $('from').value = from; $('to').value = to;
+  markDir(); loadVoices(); resetPending();
+  if (running) { try { rec.abort(); } catch (e) {} }   // onend restarts it in the new language
+}
+for (const b of document.querySelectorAll('.dir button')) b.onclick = () => setDir(b.dataset.from, b.dataset.to);
+$('from').onchange = $('to').onchange = () => setDir($('from').value, $('to').value);
 
 // ---- voices ----
 function loadVoices() {
   if (!synth) return;
   const lang = $('to').value, vs = synth.getVoices().filter(v => v.lang.toLowerCase().startsWith(lang));
   const score = v => (/premium/i.test(v.name) ? 40 : 0) + (/enhanced/i.test(v.name) ? 30 : 0) + (/google/i.test(v.name) ? 20 : 0)
-    + (/^(samantha|ava|alex|joana|luciana|felipe)/i.test(v.name) ? 10 : 0) + (v.lang === 'en-US' ? 5 : 0);
+    + (/^(samantha|ava|alex|luciana|joana|felipe)/i.test(v.name) ? 10 : 0) + (/^(en-US|pt-BR)$/.test(v.lang) ? 5 : 0);
   vs.sort((a, b) => score(b) - score(a));
-  const prev = $('voice').value;
   $('voice').innerHTML = '';
   for (const v of vs) { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')'; $('voice').appendChild(o); }
-  if (vs.some(v => v.name === prev)) $('voice').value = prev;
 }
-if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
-$('to').onchange = loadVoices;
+if (synth) synth.onvoiceschanged = loadVoices;
 
 function say(text) {
   if (!synth || !$('speak').checked) return;
@@ -113,7 +150,7 @@ function pump() {
   const next = queue.shift();
   if (!next) { if (pausedForVoice) { pausedForVoice = false; if (running) startRec(); } return; }
   talking = true;
-  if (running && !$('phones').checked && rec && !pausedForVoice) { pausedForVoice = true; try { rec.abort(); } catch (e) {} }
+  if (running && !$('phones').checked && !pausedForVoice) { pausedForVoice = true; try { rec.abort(); } catch (e) {} }
   const u = new SpeechSynthesisUtterance(next);
   const v = synth.getVoices().find(v => v.name === $('voice').value);
   if (v) { u.voice = v; u.lang = v.lang; } else u.lang = $('to').value;
@@ -129,7 +166,7 @@ async function translate(text, sl, tl) {
   return d[0].map(p => p[0]).join('');
 }
 
-async function handleFinal(text) {
+async function handleText(text) {
   text = text.trim();
   if (!text) return;
   const sl = $('from').value.split('-')[0], tl = $('to').value;
@@ -146,6 +183,33 @@ async function handleFinal(text) {
   say(out);
 }
 
+// ---- wait for the pause, then translate everything heard ----
+function renderPending() {
+  $('pending').textContent = pending.join(' ');
+  if (interimText) { const s = document.createElement('span'); s.className = 'i'; s.textContent = (pending.length ? ' ' : '') + interimText; $('pending').appendChild(s); }
+}
+function armTimer() {
+  clearTimeout(timer); timer = null;
+  if (!pending.length && !interimText) { $('bar').style.width = '0'; return; }
+  timerStart = Date.now();
+  timer = setTimeout(flush, +$('wait').value);
+}
+function tickBar() {
+  $('bar').style.width = timer ? Math.min(100, (Date.now() - timerStart) / +$('wait').value * 100) + '%' : '0';
+  requestAnimationFrame(tickBar);
+}
+requestAnimationFrame(tickBar);
+
+function flush() {
+  clearTimeout(timer); timer = null;
+  const text = [...pending, interimText].join(' ').trim();
+  for (const i of interimIdx) seen.add(i);   // a phrase translated while still interim must not come back when Chrome finalizes it
+  pending = []; interimText = ''; interimIdx = [];
+  renderPending();
+  if (text) handleText(text);
+}
+function resetPending() { clearTimeout(timer); timer = null; pending = []; interimText = ''; interimIdx = []; renderPending(); }
+
 // ---- recognition ----
 function startRec() {
   if (!rec) return;
@@ -157,25 +221,38 @@ function setup() {
   rec = new SR();
   rec.continuous = true;
   rec.interimResults = true;
-  rec.onstart = () => status('Listening...', 'live');
+  rec.onstart = () => { seen = new Set(); interimIdx = []; status('Listening. Translates after a ' + (+$('wait').value / 1000) + ' second pause.', 'live'); };
   rec.onresult = e => {
     if (pausedForVoice) return;
-    let interim = '';
+    interimText = ''; interimIdx = [];
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) handleFinal(r[0].transcript); else interim += r[0].transcript;
+      if (seen.has(i)) continue;
+      const r = e.results[i], t = r[0].transcript.trim();
+      if (r.isFinal) { seen.add(i); if (t) pending.push(t); }
+      else if (t) { interimText += (interimText ? ' ' : '') + t; interimIdx.push(i); }
     }
-    $('interim').textContent = interim;
+    renderPending();
+    armTimer();
   };
   rec.onerror = e => {
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stop(); status('Microphone blocked. Allow it in the address bar, then press Start again.', 'warn'); }
     else if (e.error === 'network') status('Speech service unreachable, retrying...', 'warn');
   };
-  // Chrome ends recognition after silence or a network blip: restart while running
-  rec.onend = () => { $('interim').textContent = ''; if (running && !pausedForVoice) setTimeout(startRec, 250); else if (pausedForVoice) status('Speaking...', 'live'); };
+  // Chrome ends recognition after silence or a network blip: restart while running.
+  // An unfinished phrase is dropped by Chrome here, so keep what we had of it.
+  rec.onend = () => {
+    if (interimText) { pending.push(interimText); interimText = ''; interimIdx = []; renderPending(); armTimer(); }
+    if (running && !pausedForVoice) setTimeout(startRec, 250);
+    else if (pausedForVoice) status('Reading the translation aloud...', 'live');
+  };
 }
 
-function stop() { running = false; pausedForVoice = false; queue = []; if (synth) synth.cancel(); talking = false; try { rec && rec.abort(); } catch (e) {} $('go').textContent = 'Start'; $('go').classList.remove('on'); status('Stopped.'); }
+function stop() {
+  running = false; pausedForVoice = false; queue = []; if (synth) synth.cancel(); talking = false;
+  try { rec && rec.abort(); } catch (e) {}
+  resetPending();
+  $('go').textContent = 'Start'; $('go').classList.remove('on'); status('Stopped.');
+}
 
 $('go').onclick = () => {
   if (running) return stop();
@@ -186,9 +263,18 @@ $('go').onclick = () => {
   if (synth) synth.speak(new SpeechSynthesisUtterance('')); // unlock audio on this click
   startRec();
 };
-$('from').onchange = () => { if (running) { try { rec.abort(); } catch (e) {} } };
-$('testGo').onclick = () => { handleFinal($('testIn').value); $('testIn').value = ''; };
+$('now').onclick = flush;
+$('wait').onchange = () => { if (running) status('Listening. Translates after a ' + (+$('wait').value / 1000) + ' second pause.', 'live'); armTimer(); };
+$('testGo').onclick = () => { handleText($('testIn').value); $('testIn').value = ''; };
 $('testIn').onkeydown = e => { if (e.key === 'Enter') $('testGo').click(); };
+
+// URL presets: ?from=en-US&to=pt&wait=5000&speak=0
+const q = new URLSearchParams(location.search);
+if (q.get('from')) $('from').value = q.get('from');
+if (q.get('to')) $('to').value = q.get('to');
+if (q.get('wait')) $('wait').value = q.get('wait');
+if (q.get('speak') === '0') $('speak').checked = false;
+markDir(); loadVoices();
 if (!SR) status('This browser has no speech recognition. Open the link in Chrome.', 'warn');
 </script>
 </body>
